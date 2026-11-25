@@ -164,7 +164,7 @@ def patch_source(source: Path, tag: str) -> None:
     # Remove legacy host mentions from diagnostics and comments too; the shipped GUI must
     # neither contact nor direct users to the upstream host if it is unavailable.
     updater_text = updater.read_text(encoding="utf-8").replace("git.notrexed.dev", "GitHub")
-    updater.write_text(updater_text, encoding="utf-8", newline="\\n")
+    updater.write_text(updater_text, encoding="utf-8", newline="\n")
 
     window = source / "builder" / "BlueShellBuilder" / "MainWindow.xaml.cs"
     patch_text(window, [
