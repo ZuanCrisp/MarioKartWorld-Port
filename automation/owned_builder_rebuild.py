@@ -216,7 +216,6 @@ def patch_source(source: Path, tag: str) -> None:
             'https://git.notrexed.dev/%s/releases/download/builder-parts',
             'https://github.com/%s/releases/download/builder-parts',
         ),
-        ("git.notrexed.dev", "github.com"),
     ])
 
     # Fail closed if a runtime updater/setup path still contains the old host or old project.
