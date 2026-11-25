@@ -187,8 +187,8 @@ def patch_source(source: Path, tag: str) -> None:
             '!strncmp(out, "https://github.com/ZuanCrisp/MarioKartWorld-Port/", sizeof("https://github.com/ZuanCrisp/MarioKartWorld-Port/") - 1)',
         ),
         (
-            'const char *close = strchr(at, \'}\'), *url = strstr(at, "\\"browser_download_url\\"");\\n    return url && close && url < close && json_string_after(url + 22, end, out, n) &&\\n           !strncmp(out, "https://github.com/ZuanCrisp/MarioKartWorld-Port/", sizeof("https://github.com/ZuanCrisp/MarioKartWorld-Port/") - 1);',
-            'const char *close = strchr(at, \'}\'), *url = strstr(at, "\\"url\\"");\\n    return url && close && url < close && json_string_after(url + 5, end, out, n) &&\\n           !strncmp(out, "https://api.github.com/repos/ZuanCrisp/MarioKartWorld-Port/releases/assets/", sizeof("https://api.github.com/repos/ZuanCrisp/MarioKartWorld-Port/releases/assets/") - 1);',
+            'const char *close = strchr(at, \'}\'), *url = strstr(at, "\\"browser_download_url\\"");\n    return url && close && url < close && json_string_after(url + 22, end, out, n) &&\n           !strncmp(out, "https://github.com/ZuanCrisp/MarioKartWorld-Port/", sizeof("https://github.com/ZuanCrisp/MarioKartWorld-Port/") - 1);',
+            'const char *close = strchr(at, \'}\'), *url = strstr(at, "\\"url\\"");\n    return url && close && url < close && json_string_after(url + 5, end, out, n) &&\n           !strncmp(out, "https://api.github.com/repos/ZuanCrisp/MarioKartWorld-Port/releases/assets/", sizeof("https://api.github.com/repos/ZuanCrisp/MarioKartWorld-Port/releases/assets/") - 1);',
         ),
         (
             'static const char pre[] = "https://git.notrexed.dev/";',
