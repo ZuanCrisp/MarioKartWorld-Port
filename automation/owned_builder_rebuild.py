@@ -232,7 +232,7 @@ def patch_source(source: Path, tag: str) -> None:
         patched = patched.replace("git.notrexed.dev", "GitHub")
         patched = patched.replace("NotRexed/BlueShell", owner_repo)
         patched = patched.replace("BlueShell/BlueShell", owner_repo)
-        path.write_text(patched, encoding="utf-8", newline="\\n")
+        path.write_text(patched, encoding="utf-8", newline="\n")
 
     # Fail closed if any legacy host/repository identifier remains in these runtime files.
     for path in (updater, window, setup_c, parts_script):
