@@ -70,7 +70,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $automation = Join-Path $env:GITHUB_WORKSPACE "automation"
+          $automation = Join-Path $env:GITHUB_WORKSPACE "automation/automation"
           $source = Join-Path $env:GITHUB_WORKSPACE "source"
           $versionsFile = Join-Path $automation "requested-versions.txt"
           if (-not (Test-Path $versionsFile)) { throw "automation/requested-versions.txt is missing." }
