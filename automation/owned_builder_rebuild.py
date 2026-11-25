@@ -187,6 +187,10 @@ def patch_source(source: Path, tag: str) -> None:
             '!strncmp(out, "https://github.com/ZuanCrisp/MarioKartWorld-Port/", sizeof("https://github.com/ZuanCrisp/MarioKartWorld-Port/") - 1)',
         ),
         (
+            'const char *close = strchr(at, \'}\'), *url = strstr(at, "\\"browser_download_url\\"");\\n    return url && close && url < close && json_string_after(url + 22, end, out, n) &&\\n           !strncmp(out, "https://github.com/ZuanCrisp/MarioKartWorld-Port/", sizeof("https://github.com/ZuanCrisp/MarioKartWorld-Port/") - 1);',
+            'const char *close = strchr(at, \'}\'), *url = strstr(at, "\\"url\\"");\\n    return url && close && url < close && json_string_after(url + 5, end, out, n) &&\\n           !strncmp(out, "https://api.github.com/repos/ZuanCrisp/MarioKartWorld-Port/releases/assets/", sizeof("https://api.github.com/repos/ZuanCrisp/MarioKartWorld-Port/releases/assets/") - 1);',
+        ),
+        (
             'static const char pre[] = "https://git.notrexed.dev/";',
             'static const char pre[] = "https://github.com/";',
         ),
@@ -487,17 +491,55 @@ def main() -> int:
             fail(f"Generated part is empty: {item.name}")
         print(f"Prepared part: {item.name} ({item.stat().st_size} bytes; SHA-256 {sha256_file(item)})", flush=True)
 
-    # Publish the dependency parts first, so the version manifest never points to an absent asset.
+    # Publish dependency parts append-only: never clobber an existing builder-parts asset.
     gh_env = dict(os.environ)
     gh_env["GH_TOKEN"] = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
     gh = shutil.which("gh")
     if not gh:
         fail("GitHub CLI (gh) is not available on this runner.")
-    run(
-        [gh, "release", "upload", PARTS_TAG, *[str(item) for item in new_parts],
-         "--repo", REPO, "--clobber"],
-        env=gh_env,
-    )
+
+    current_parts = api_json(f"https://api.github.com/repos/{REPO}/releases/tags/{PARTS_TAG}")
+    existing_parts = {asset["name"]: asset for asset in current_parts.get("assets", [])}
+    upload_parts: list[Path] = []
+    for item in new_parts:
+        current = existing_parts.get(item.name)
+        if current is None:
+            upload_parts.append(item)
+            continue
+        local_digest = sha256_file(item)
+        remote_digest = (current.get("digest") or "").removeprefix("sha256:").lower()
+        if int(current.get("size") or -1) != item.stat().st_size or remote_digest != local_digest:
+            fail(f"Refusing to overwrite existing builder-parts asset with different bytes: {item.name}")
+        print(f"Already present with identical SHA-256; keeping existing part asset: {item.name}", flush=True)
+
+    if upload_parts:
+        run(
+            [gh, "release", "upload", PARTS_TAG, *[str(item) for item in upload_parts], "--repo", REPO],
+            env=gh_env,
+        )
+    else:
+        print("All generated dependency parts already exist unchanged; builder-parts was not modified.", flush=True)
+
+    # Confirm each manifest dependency now exists on our own builder-parts release.
+    published_parts = api_json(f"https://api.github.com/repos/{REPO}/releases/tags/{PARTS_TAG}")
+    published_by_name = {asset["name"]: asset for asset in published_parts.get("assets", [])}
+    for line in manifest_text.splitlines():
+        if not line.startswith("part "):
+            continue
+        asset_name = line.split()[6].rsplit("/", 1)[-1]
+        if asset_name.startswith("BlueShellBuilder-") and asset_name.endswith(".zip"):
+            asset = published_by_name.get(asset_name)
+            if asset is None:
+                fail(f"Manifest dependency is not published on builder-parts: {asset_name}")
+            expected = line.split()[1]
+            actual = (asset.get("digest") or "").removeprefix("sha256:").lower()
+            if actual != expected.lower():
+                fail(f"Published dependency checksum differs from manifest: {asset_name}")
+
+    # Verify the target stable release exists before replacing exactly the agreed versioned assets.
+    target_release = api_json(f"https://api.github.com/repos/{REPO}/releases/tags/{tag}")
+    if target_release.get("draft") or target_release.get("prerelease") or target_release.get("tag_name") != tag:
+        fail(f"Refusing to upload Builder assets to a non-stable or mismatched release: {tag}")
     run(
         [
             gh, "release", "upload", tag,
