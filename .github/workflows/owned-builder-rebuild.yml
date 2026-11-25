@@ -18,8 +18,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 180
     env:
-      GH_TOKEN: \${{ github.token }}
-      GITHUB_TOKEN: \${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out rebuild automation
         uses: actions/checkout@v4
