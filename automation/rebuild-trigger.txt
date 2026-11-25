@@ -1,0 +1,1 @@
+Rebuild trigger updated after correcting automation checkout path.
