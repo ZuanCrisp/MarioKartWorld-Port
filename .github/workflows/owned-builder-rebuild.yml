@@ -1,0 +1,110 @@
+name: Rebuild BlueShell Builder (owned distribution)
+
+on:
+  push:
+    branches:
+      - builder-rebuild
+
+permissions:
+  contents: write
+
+concurrency:
+  group: blueshell-owned-builder-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Build and publish owned Windows Builder assets
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: \${{ github.token }}
+      GITHUB_TOKEN: \${{ github.token }}
+    steps:
+      - name: Check out rebuild automation
+        uses: actions/checkout@v4
+        with:
+          ref: builder-rebuild
+          path: automation
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out the mirrored source and tags
+        uses: actions/checkout@v4
+        with:
+          repository: ZuanCrisp/MarioKartWorld-Port
+          ref: main
+          path: source
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Validate repository-owned release store
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          gh auth status
+          $repo = "ZuanCrisp/MarioKartWorld-Port"
+          $parts = gh api "repos/$repo/releases/tags/builder-parts" | ConvertFrom-Json
+          if ($parts.draft -or -not $parts.prerelease) {
+            throw "builder-parts must remain a published prerelease."
+          }
+          $required = @("BlueShellBuilder-app-", "BlueShellBuilder-cpm-", "BlueShellBuilder-python-", "BlueShellBuilder-emsdk-", "BlueShellBuilder-third_party-", "BlueShellBuilder-wgpu-native-")
+          foreach ($prefix in $required) {
+            if (-not ($parts.assets | Where-Object { $_.name.StartsWith($prefix) -and $_.name.EndsWith(".zip") })) {
+              throw "Missing required owned dependency part: $prefix"
+            }
+          }
+          Write-Host "Owned builder-parts release is present and contains the required seed packages."
+
+      - name: Rebuild each requested version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $automation = Join-Path $env:GITHUB_WORKSPACE "automation"
+          $source = Join-Path $env:GITHUB_WORKSPACE "source"
+          $versionsFile = Join-Path $automation "requested-versions.txt"
+          if (-not (Test-Path $versionsFile)) { throw "automation/requested-versions.txt is missing." }
+
+          $versions = Get-Content $versionsFile |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -and -not $_.StartsWith("#") }
+
+          if ($versions.Count -lt 1) { throw "No release tags were requested for rebuild." }
+          $seen = @{}
+          $cache = Join-Path $env:RUNNER_TEMP "owned-builder-cache"
+
+          foreach ($tag in $versions) {
+            if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+              throw "Invalid stable release tag in requested-versions.txt: $tag"
+            }
+            if ($seen.ContainsKey($tag)) { throw "Duplicate release tag: $tag" }
+            $seen[$tag] = $true
+
+            Write-Host "=================================================="
+            Write-Host "Rebuilding $tag from the mirrored source tag"
+            git -C $source checkout --force --detach "refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) { throw "Could not check out source tag $tag." }
+
+            git -C $source clean -fdx
+            if ($LASTEXITCODE -ne 0) { throw "Could not clean source worktree for $tag." }
+
+            git -C $source lfs pull origin "refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) { throw "Git LFS download failed for $tag." }
+
+            $workspace = Join-Path $env:RUNNER_TEMP ("owned-builder-" + $tag)
+            python (Join-Path $automation "owned_builder_rebuild.py") --source $source --tag $tag --workspace $workspace --cache $cache
+            if ($LASTEXITCODE -ne 0) { throw "Owned Builder rebuild failed for $tag." }
+          }
+
+          Write-Host "All requested BlueShell Builder versions were rebuilt and published."
