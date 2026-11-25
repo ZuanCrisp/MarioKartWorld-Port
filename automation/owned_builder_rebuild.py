@@ -225,7 +225,16 @@ def patch_source(source: Path, tag: str) -> None:
         ),
     ])
 
-    # Fail closed if a runtime updater/setup path still contains the old host or old project.
+    # Normalize residual comments/diagnostics as well as endpoints on the temporary build tree.
+    # This avoids shipping stale support links or host names in the GUI.
+    for path in (updater, window, setup_c, parts_script):
+        patched = path.read_text(encoding="utf-8")
+        patched = patched.replace("git.notrexed.dev", "GitHub")
+        patched = patched.replace("NotRexed/BlueShell", owner_repo)
+        patched = patched.replace("BlueShell/BlueShell", owner_repo)
+        path.write_text(patched, encoding="utf-8", newline="\\n")
+
+    # Fail closed if any legacy host/repository identifier remains in these runtime files.
     for path in (updater, window, setup_c, parts_script):
         text = path.read_text(encoding="utf-8")
         if "git.notrexed.dev" in text or "NotRexed/BlueShell" in text or "BlueShell/BlueShell" in text:
